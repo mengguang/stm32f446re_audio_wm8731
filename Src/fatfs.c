@@ -1,8 +1,7 @@
 /**
   ******************************************************************************
-  * File Name          : I2C.h
-  * Description        : This file provides code for the configuration
-  *                      of the I2C instances.
+  * @file   fatfs.c
+  * @brief  Code for fatfs applications
   ******************************************************************************
   * This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
@@ -46,43 +45,58 @@
   *
   ******************************************************************************
   */
-/* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __i2c_H
-#define __i2c_H
-#ifdef __cplusplus
- extern "C" {
-#endif
 
-/* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include "fatfs.h"
 
-/* USER CODE BEGIN Includes */
+uint8_t retSD;    /* Return value for SD */
+char SDPath[4];   /* SD logical drive path */
+FATFS SDFatFS;    /* File system object for SD logical drive */
+FIL SDFile;       /* File object for SD */
 
-/* USER CODE END Includes */
+/* USER CODE BEGIN Variables */
 
-extern I2C_HandleTypeDef hi2c1;
+/* USER CODE END Variables */    
 
-/* USER CODE BEGIN Private defines */
+void MX_FATFS_Init(void) 
+{
+  /*## FatFS: Link the SD driver ###########################*/
+  retSD = FATFS_LinkDriver(&SD_Driver, SDPath);
 
-/* USER CODE END Private defines */
-
-void MX_I2C1_Init(void);
-
-/* USER CODE BEGIN Prototypes */
-
-/* USER CODE END Prototypes */
-
-#ifdef __cplusplus
+  /* USER CODE BEGIN Init */
+  /* additional user code for init */
+  printf("SDPath: %s\n",SDPath);
+  if(f_mount(&SDFatFS, (TCHAR const*)SDPath, 0) != FR_OK)
+  {
+    /* FatFs Initialization Error */
+	printf("f_mount error!\n");
+    Error_Handler();
+  } else {
+//	  uint8_t buffer[_MAX_SS]; /* a work buffer for the f_mkfs() */
+//      /*##-3- Create a FAT file system (format) on the logical drive #########*/
+//      FRESULT result;
+//	  if((result = f_mkfs((TCHAR const*)SDPath, FM_ANY, 0, buffer, sizeof(buffer))) != FR_OK)
+//      {
+//    	printf("f_mkfs error: %d\n",result);
+//        Error_Handler();
+//      }
+  }
+  /* USER CODE END Init */
 }
-#endif
-#endif /*__ i2c_H */
 
 /**
-  * @}
+  * @brief  Gets Time from RTC 
+  * @param  None
+  * @retval Time in DWORD
   */
+DWORD get_fattime(void)
+{
+  /* USER CODE BEGIN get_fattime */
+  return 0;
+  /* USER CODE END get_fattime */  
+}
 
-/**
-  * @}
-  */
+/* USER CODE BEGIN Application */
+     
+/* USER CODE END Application */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

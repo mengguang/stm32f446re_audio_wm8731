@@ -1,8 +1,7 @@
 /**
   ******************************************************************************
-  * File Name          : I2C.h
-  * Description        : This file provides code for the configuration
-  *                      of the I2C instances.
+  * @file    sd_diskio.h (based on sd_diskio_template.h v2.0.2)
+  * @brief   Header for sd_diskio.c module
   ******************************************************************************
   * This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
@@ -46,43 +45,27 @@
   *
   ******************************************************************************
   */
+
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __i2c_H
-#define __i2c_H
-#ifdef __cplusplus
- extern "C" {
-#endif
+#ifndef __SD_DISKIO_H
+#define __SD_DISKIO_H
+
+/* USER CODE BEGIN firstSection */ 
+/* can be used to modify / undefine following code or add new definitions */
+/* USER CODE END firstSection */
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include "bsp_driver_sd.h"
+/* Exported types ------------------------------------------------------------*/
+/* Exported constants --------------------------------------------------------*/
+/* Exported functions ------------------------------------------------------- */
+extern const Diskio_drvTypeDef  SD_Driver;
 
-/* USER CODE BEGIN Includes */
+/* USER CODE BEGIN lastSection */ 
+/* can be used to modify / undefine previous code or add new definitions */
+/* USER CODE END lastSection */
 
-/* USER CODE END Includes */
-
-extern I2C_HandleTypeDef hi2c1;
-
-/* USER CODE BEGIN Private defines */
-
-/* USER CODE END Private defines */
-
-void MX_I2C1_Init(void);
-
-/* USER CODE BEGIN Prototypes */
-
-/* USER CODE END Prototypes */
-
-#ifdef __cplusplus
-}
-#endif
-#endif /*__ i2c_H */
-
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
+#endif /* __SD_DISKIO_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/
+

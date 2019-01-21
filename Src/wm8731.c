@@ -64,7 +64,7 @@ bool wm8731_dac_init()
     wm8731_reg_write(WM8731_REG_DA_INTERFACE_FORMAT,0b00010010);
 
     // sampling control
-    wm8731_reg_write(WM8731_REG_SAMPLECTRL,0b00001100);
+    //wm8731_reg_write(WM8731_REG_SAMPLECTRL,0b00000000);
 
     // volume
     wm8731_reg_write(WM8731_REG_LEFT_HPOUT, 0b01100001);

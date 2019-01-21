@@ -1,8 +1,8 @@
 /**
-  ******************************************************************************
-  * File Name          : I2C.h
-  * Description        : This file provides code for the configuration
-  *                      of the I2C instances.
+ ******************************************************************************
+  * @file    bsp_driver_sd.h for F4 (based on stm324x9i_eval_sd.h)
+  * @brief   This file contains the common defines and functions prototypes for 
+  *          the bsp_driver_sd.c driver.
   ******************************************************************************
   * This notice applies to any and all portions of this file
   * that are not between comment pairs USER CODE BEGIN and
@@ -46,43 +46,78 @@
   *
   ******************************************************************************
   */
+
 /* Define to prevent recursive inclusion -------------------------------------*/
-#ifndef __i2c_H
-#define __i2c_H
+#ifndef __STM32F4_SD_H
+#define __STM32F4_SD_H
+
 #ifdef __cplusplus
  extern "C" {
-#endif
+#endif 
 
 /* Includes ------------------------------------------------------------------*/
-#include "main.h"
+#include "stm32f4xx_hal.h"
+#include "fatfs_platform.h"
 
-/* USER CODE BEGIN Includes */
+/* Exported types --------------------------------------------------------*/ 
+/** 
+  * @brief SD Card information structure 
+  */
+#define BSP_SD_CardInfo HAL_SD_CardInfoTypeDef
 
-/* USER CODE END Includes */
+/* Exported constants --------------------------------------------------------*/ 
+/**
+  * @brief  SD status structure definition  
+  */     
+#define   MSD_OK                        ((uint8_t)0x00)
+#define   MSD_ERROR                     ((uint8_t)0x01)
 
-extern I2C_HandleTypeDef hi2c1;
+/** 
+  * @brief  SD transfer state definition  
+  */     
+#define   SD_TRANSFER_OK                ((uint8_t)0x00)
+#define   SD_TRANSFER_BUSY              ((uint8_t)0x01)
 
-/* USER CODE BEGIN Private defines */
+#define SD_PRESENT               ((uint8_t)0x01)
+#define SD_NOT_PRESENT           ((uint8_t)0x00)
+#define SD_DATATIMEOUT           ((uint32_t)100000000)
 
-/* USER CODE END Private defines */
+#ifdef OLD_API
+/* kept to avoid issue when migrating old projects. */
+/* USER CODE BEGIN 0 */
 
-void MX_I2C1_Init(void);
+/* USER CODE END 0 */ 
+#else
+/* USER CODE BEGIN BSP_H_CODE */
+/* Exported functions --------------------------------------------------------*/   
+uint8_t BSP_SD_Init(void);
+uint8_t BSP_SD_ITConfig(void);
+void    BSP_SD_DetectIT(void);
+void    BSP_SD_DetectCallback(void);
+uint8_t BSP_SD_ReadBlocks(uint32_t *pData, uint32_t ReadAddr, uint32_t NumOfBlocks, uint32_t Timeout);
+uint8_t BSP_SD_WriteBlocks(uint32_t *pData, uint32_t WriteAddr, uint32_t NumOfBlocks, uint32_t Timeout);
+uint8_t BSP_SD_ReadBlocks_DMA(uint32_t *pData, uint32_t ReadAddr, uint32_t NumOfBlocks);
+uint8_t BSP_SD_WriteBlocks_DMA(uint32_t *pData, uint32_t WriteAddr, uint32_t NumOfBlocks);
+uint8_t BSP_SD_Erase(uint32_t StartAddr, uint32_t EndAddr);
+void BSP_SD_IRQHandler(void);
+void BSP_SD_DMA_Tx_IRQHandler(void);
+void BSP_SD_DMA_Rx_IRQHandler(void);
+uint8_t BSP_SD_GetCardState(void);
+void    BSP_SD_GetCardInfo(HAL_SD_CardInfoTypeDef *CardInfo);
+uint8_t BSP_SD_IsDetected(void);
 
-/* USER CODE BEGIN Prototypes */
-
-/* USER CODE END Prototypes */
-
+/* These functions can be modified in case the current settings (e.g. DMA stream)
+   need to be changed for specific application needs */
+void    BSP_SD_AbortCallback(void);
+void    BSP_SD_WriteCpltCallback(void);
+void    BSP_SD_ReadCpltCallback(void);
+/* USER CODE END BSP_H_CODE */
+#endif
+   
 #ifdef __cplusplus
 }
 #endif
-#endif /*__ i2c_H */
 
-/**
-  * @}
-  */
-
-/**
-  * @}
-  */
+#endif /* __STM32F4_SD_H */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

@@ -51,8 +51,10 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
+#include "fatfs.h"
 #include "i2c.h"
 #include "i2s.h"
+#include "sdio.h"
 #include "usart.h"
 #include "gpio.h"
 
@@ -61,6 +63,7 @@
 #include "SEGGER_RTT.h"
 #include "wm8731.h"
 #include "stdbool.h"
+#include "ff.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -98,6 +101,9 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
+// Attention Please!
+// You must enable pull up on SDIO interface.
+
 int _write(int file, char *ptr, int len) {
 	(void) file; /* Not used, avoid warning */
 	SEGGER_RTT_Write(0, ptr, len);
@@ -107,6 +113,16 @@ int _write(int file, char *ptr, int len) {
 __IO uint8_t I2S_TX_CPLT = 0;
 
 void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
+{
+ /* Prevent unused argument(s) compilation warning */
+ UNUSED(hi2s);
+ I2S_TX_CPLT = 1;
+}
+
+
+//__IO uint8_t I2S_TX_HALF_CPLT = 0;
+
+void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 {
  /* Prevent unused argument(s) compilation warning */
  UNUSED(hi2s);
@@ -147,13 +163,24 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2S2_Init();
   MX_I2C1_Init();
+  MX_SDIO_SD_Init();
+  MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  /* Retrieve Wave Sample rate */
-  WAVE_FormatTypeDef *waveformat =  NULL;
-  waveformat = (WAVE_FormatTypeDef*)AUDIO_FILE_ADDRESS;
-  wm8731_display_wav_info(waveformat);
+  HAL_Delay(100);
+  MX_I2C1_Init();
   wm8731_dac_init();
+
+  //while(1);
+
+  FIL file;
+  FRESULT result = f_open(&file,"full.wav",FA_READ);
+  if(result != FR_OK) {
+	  printf("f_open error: %d\n",result);
+	  while(1);
+  }
+
+  //while(1);
 
   /* USER CODE END 2 */
 
@@ -166,6 +193,50 @@ int main(void)
     /* USER CODE BEGIN 3 */
 	  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	  printf("Begin to play music!\n");
+
+	  //Play music in SDIO SD Card.
+	  f_rewind(&file);
+	  WAVE_FormatTypeDef header;
+	  unsigned int nread = 0;
+	  result = f_read(&file,&header,sizeof(WAVE_FormatTypeDef),&nread);
+	  if(result != FR_OK) {
+		  printf("f_read error: %d\n",result);
+		  Error_Handler();
+	  }
+	  wm8731_display_wav_info(&header);
+
+	  uint8_t read_buffer[2][16384];
+	  //I2S_TX_CPLT = 1;
+	  uint8_t read_buffer_index = 0;
+
+	  result = f_read(&file,read_buffer[read_buffer_index],16384 * 2,&nread);
+	  if(result != FR_OK) {
+		  printf("f_read error: %d\n",result);
+		  Error_Handler();
+	  }
+	  // circular buffer
+	  HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t *)(read_buffer[read_buffer_index]), 16384);
+
+	  while(!f_eof(&file)) {
+		  while(I2S_TX_CPLT == 0);
+		  I2S_TX_CPLT = 0;
+
+		  printf("start read: %lu\n",f_tell(&file));
+		  result = f_read(&file,read_buffer[read_buffer_index],16384,&nread);
+		  if(result != FR_OK) {
+			  printf("f_read error: %d\n",result);
+			  Error_Handler();
+		  }
+		  printf("nread: %d\n",nread);
+		  read_buffer_index = 1 - read_buffer_index;
+	  }
+	  HAL_I2S_DMAStop(&hi2s2);
+
+
+	  //Play music from internal flash.
+      /*
+	  WAVE_FormatTypeDef *waveformat = (WAVE_FormatTypeDef*)AUDIO_FILE_ADDRESS;
+      wm8731_display_wav_info(waveformat);
 	  uint32_t begin = AUDIO_FILE_ADDRESS + AUDIO_START_OFFSET_ADDRESS;
 	  uint32_t current = 0;
 	  uint32_t total = AUDIO_FILE_SIZE - AUDIO_START_OFFSET_ADDRESS;
@@ -180,6 +251,7 @@ int main(void)
 		  I2S_TX_CPLT = 0;
 		  current += block_size;
 	  }
+	  */
 
   }
   /* USER CODE END 3 */
@@ -198,7 +270,7 @@ void SystemClock_Config(void)
   /**Configure the main internal regulator output voltage 
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
   /**Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
@@ -207,17 +279,11 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLN = 50;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 8;
+  RCC_OscInitStruct.PLL.PLLQ = 5;
   RCC_OscInitStruct.PLL.PLLR = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /**Activate the Over-Drive mode 
-  */
-  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
@@ -227,20 +293,23 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
     Error_Handler();
   }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S_APB1;
+  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S_APB1|RCC_PERIPHCLK_SDIO
+                              |RCC_PERIPHCLK_CLK48;
   PeriphClkInitStruct.PLLI2S.PLLI2SN = 50;
   PeriphClkInitStruct.PLLI2S.PLLI2SP = RCC_PLLI2SP_DIV2;
   PeriphClkInitStruct.PLLI2S.PLLI2SM = 8;
   PeriphClkInitStruct.PLLI2S.PLLI2SR = 2;
   PeriphClkInitStruct.PLLI2S.PLLI2SQ = 2;
   PeriphClkInitStruct.PLLI2SDivQ = 1;
+  PeriphClkInitStruct.Clk48ClockSelection = RCC_CLK48CLKSOURCE_PLLQ;
+  PeriphClkInitStruct.SdioClockSelection = RCC_SDIOCLKSOURCE_CLK48;
   PeriphClkInitStruct.I2sApb1ClockSelection = RCC_I2SAPB1CLKSOURCE_PLLI2S;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
