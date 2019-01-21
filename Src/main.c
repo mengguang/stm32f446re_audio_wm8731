@@ -64,6 +64,8 @@
 #include "wm8731.h"
 #include "stdbool.h"
 #include "ff.h"
+#include "adpcm.h"
+#include "string.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -129,6 +131,136 @@ void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
  I2S_TX_CPLT = 1;
 }
 
+uint8_t block[2048];
+uint16_t samples[2][4082];
+
+void ADPCM_Play_File(FIL *file) {
+	FRESULT result;
+	unsigned int nread = 0;
+	f_rewind(file);
+	IMA_ADPCM_HEADER header;
+	result = f_read(file,&header,sizeof(header),&nread);
+	if(result != FR_OK) {
+		printf("f_read error: %d\n",result);
+		while(1);
+	}
+	ADPCM_WaveParsing(&header);
+
+	int8_t samples_index = 0;
+
+	memset(samples,0,4082*2*2);
+	HAL_I2S_Transmit_DMA(&hi2s2, samples[0], 4082*2);
+
+	while(!f_eof(file)) {
+		result = f_read(file,block,sizeof(block),&nread);
+		if(result != FR_OK) {
+			printf("f_read error: %d\n",result);
+			while(1);
+		}
+
+		while(I2S_TX_CPLT == 0);
+		I2S_TX_CPLT = 0;
+
+		int32_t left_predsample = *((int16_t *)(block+0));
+		int16_t left_index = block[2];
+
+		int32_t right_predsample = *((int16_t *)(block+4));
+		int16_t right_index = block[6];
+
+		//memset(samples[samples_index],0,4082*2);
+
+		int samples_i = 0;
+		samples[samples_index][samples_i] = left_predsample;
+		samples_i++;
+		samples[samples_index][samples_i] = right_predsample;
+		samples_i ++;
+
+		uint8_t code;
+
+		ADPCM_Block_Init(left_index,left_predsample);
+		for(int i=8;i<2048;) {
+
+			//left channel
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i+=5;
+		}
+
+		samples_i = 3;
+		ADPCM_Block_Init(right_index,right_predsample);
+		for(int i=12;i<2048;) {
+
+			//right channel
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i+=5;
+		}
+
+		samples_index = 1 - samples_index;
+	}
+	HAL_I2S_DMAStop(&hi2s2);
+
+
+}
+
 /* USER CODE END 0 */
 
 /**
@@ -173,14 +305,20 @@ int main(void)
 
   //while(1);
 
+  unsigned int nread = 0;
+
   FIL file;
-  FRESULT result = f_open(&file,"full.wav",FA_READ);
+  FRESULT result = f_open(&file,"adpcm.wav",FA_READ);
   if(result != FR_OK) {
 	  printf("f_open error: %d\n",result);
 	  while(1);
   }
 
-  //while(1);
+
+
+  ADPCM_Play_File(&file);
+
+  while(1);
 
   /* USER CODE END 2 */
 
@@ -197,7 +335,7 @@ int main(void)
 	  //Play music in SDIO SD Card.
 	  f_rewind(&file);
 	  WAVE_FormatTypeDef header;
-	  unsigned int nread = 0;
+
 	  result = f_read(&file,&header,sizeof(WAVE_FormatTypeDef),&nread);
 	  if(result != FR_OK) {
 		  printf("f_read error: %d\n",result);
@@ -270,7 +408,7 @@ void SystemClock_Config(void)
   /**Configure the main internal regulator output voltage 
   */
   __HAL_RCC_PWR_CLK_ENABLE();
-  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE3);
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
   /**Initializes the CPU, AHB and APB busses clocks 
   */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
@@ -279,11 +417,17 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 50;
+  RCC_OscInitStruct.PLL.PLLN = 180;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-  RCC_OscInitStruct.PLL.PLLQ = 5;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
   RCC_OscInitStruct.PLL.PLLR = 2;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /**Activate the Over-Drive mode 
+  */
+  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
@@ -293,10 +437,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
