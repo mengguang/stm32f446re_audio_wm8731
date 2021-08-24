@@ -94,6 +94,26 @@ bool ADPCM_WaveParsing(IMA_ADPCM_HEADER *header)
 	return true;
 }
 
+bool WAV_PCM_WaveParsing(WAV_PCM_HEADER *header)
+{
+	char str_buffer[16];
+	memset(str_buffer,0,sizeof(str_buffer));
+	memcpy(str_buffer,header->ChunkID,sizeof(header->ChunkID));
+	printf("ChunkID: %s\n",str_buffer);
+	printf("ChunkSize: %lu\n",header->ChunkSize);
+	memset(str_buffer,0,sizeof(str_buffer));
+	memcpy(str_buffer,header->Format,sizeof(header->Format));
+	printf("ChunkID: %s\n",str_buffer);
+	printf("AudioFormat: %u\n",header->AudioFormat);
+	printf("Number of Channels: %u\n",header->NumberOfChannels);
+	printf("Sample Rate: %lu\n",header->SampleRate);
+	printf("Block Align: %u\n",header->BlockAlign);
+	printf("Bits per sample: %u\n",header->BitsPerSample);
+	printf("Data size: %lu\n",header->DataSize);
+	return true;
+}
+
+
 int16_t adpcm_index = 0;
 int32_t predsample = 0;
 

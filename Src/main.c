@@ -95,6 +95,7 @@
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void ADPCM_Play_File(FIL *file);
+void WAV_Play_File(FIL *file);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -139,7 +140,8 @@ bool mass_storage_mount() {
 bool mass_storage_list_files() {
 	DIR dir;
 	FRESULT result;
-	result = f_opendir(&dir, "/adpcm");
+//	result = f_opendir(&dir, "/adpcm");
+	result = f_opendir(&dir, "/wav");
 	if (result != FR_OK) {
 		printf("f_opendir error: %d\n", result);
 		return false;
@@ -157,7 +159,7 @@ bool mass_storage_list_files() {
 		printf("Got file: %s\n", info.fname);
 
 		char fullpath[128];
-		snprintf(fullpath,sizeof(fullpath)-1,"/adpcm/%s",info.fname);
+		snprintf(fullpath,sizeof(fullpath)-1,"/wav/%s",info.fname);
 
 		FIL file;
 		result = f_open(&file, fullpath, FA_READ);
@@ -165,7 +167,7 @@ bool mass_storage_list_files() {
 			printf("f_open error: %d\n", result);
 			break;
 		}
-		ADPCM_Play_File(&file);
+		WAV_Play_File(&file);
 		f_close(&file);
 	}
 
@@ -373,122 +375,32 @@ void WAV_Play_File(FIL *file) {
 	FRESULT result;
 	unsigned int nread = 0;
 	f_rewind(file);
-	IMA_ADPCM_HEADER header;
+	WAV_PCM_HEADER header;
 	result = f_read(file, &header, sizeof(header), &nread);
 	if (result != FR_OK) {
 		printf("f_read error: %d\n", result);
 		while (1)
 			;
 	}
-	ADPCM_WaveParsing(&header);
-
+	WAV_PCM_WaveParsing(&header);
 	int8_t samples_index = 0;
 
 	memset(samples, 0, 4082 * 2 * 2);
 	HAL_I2S_Transmit_DMA(&hi2s2, samples[0], 4082 * 2);
 
 	while (!f_eof(file)) {
-		result = f_read(file, block, sizeof(block), &nread);
+
+		while (I2S_TX_CPLT == 0)
+			;
+		I2S_TX_CPLT = 0;
+
+		result = f_read(file, samples[samples_index], 4082 * 2, &nread);
 		if (result != FR_OK) {
 			printf("f_read error: %d\n", result);
 			while (1)
 				;
 		}
 
-		while (I2S_TX_CPLT == 0)
-			;
-		I2S_TX_CPLT = 0;
-
-		int32_t left_predsample = *((int16_t*) (block + 0));
-		int16_t left_index = block[2];
-
-		int32_t right_predsample = *((int16_t*) (block + 4));
-		int16_t right_index = block[6];
-
-		//memset(samples[samples_index],0,4082*2);
-
-		int samples_i = 0;
-		samples[samples_index][samples_i] = left_predsample;
-		samples_i++;
-		samples[samples_index][samples_i] = right_predsample;
-		samples_i++;
-
-		uint8_t code;
-
-		ADPCM_Block_Init(left_index, left_predsample);
-		for (int i = 8; i < 2048;) {
-			//left channel
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i++;
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i++;
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i++;
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i += 5;
-		}
-
-		samples_i = 3;
-		ADPCM_Block_Init(right_index, right_predsample);
-		for (int i = 12; i < 2048;) {
-			//right channel
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i++;
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i++;
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i++;
-			code = (block[i] & 0x0F);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-			code = (block[i] >> 4);
-			samples[samples_index][samples_i] = ADPCM_Decode(code);
-			samples_i += 2;
-
-			i += 5;
-		}
 		samples_index = 1 - samples_index;
 	}
 	HAL_I2S_DMAStop(&hi2s2);

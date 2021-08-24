@@ -50,6 +50,23 @@ typedef struct {
 	uint8_t		SubChunk3ID[4];
 	uint32_t	DataSize;
 } IMA_ADPCM_HEADER;
+
+typedef struct {
+	uint8_t		ChunkID[4];
+	uint32_t 	ChunkSize;
+	uint8_t 	Format[4];
+	uint8_t 	SubChunk1ID[4];
+	uint32_t	SubChunk1Size;
+	uint16_t	AudioFormat;
+	uint16_t	NumberOfChannels;
+	uint32_t	SampleRate;
+	uint32_t	ByteRate;
+	uint16_t	BlockAlign;
+	uint16_t	BitsPerSample;
+	uint8_t		SubChunk2ID[4];
+	uint32_t	DataSize;
+} WAV_PCM_HEADER;
+
 /* Exported constants --------------------------------------------------------*/
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
@@ -58,6 +75,7 @@ int16_t ADPCM_Decode(uint8_t code);
 void ADPCM_Block_Init(int16_t _index, int32_t _predsample);
 
 bool ADPCM_WaveParsing(IMA_ADPCM_HEADER *header);
+bool WAV_PCM_WaveParsing(WAV_PCM_HEADER *header);
 
 #endif /* __ADPCM_H*/
 /******************* (C) COPYRIGHT 2009 STMicroelectronics *****END OF FILE****/
