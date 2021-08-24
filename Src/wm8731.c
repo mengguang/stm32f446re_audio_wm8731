@@ -51,7 +51,7 @@ bool wm8731_dac_init()
     wm8731_reg_write(WM8731_REG_DIGITAL_PATH_CTRL, 0x00);
 
     // power down control
-    wm8731_reg_write(WM8731_REG_PWDOWN_CTRL, 0x7);
+    wm8731_reg_write(WM8731_REG_PWDOWN_CTRL, 0b00010111);
 
     // digital auduo interface format
     wm8731_reg_write(WM8731_REG_DA_INTERFACE_FORMAT,0b00010010);
@@ -60,11 +60,14 @@ bool wm8731_dac_init()
     //wm8731_reg_write(WM8731_REG_SAMPLECTRL,0b00000000);
 
     // volume
-    wm8731_reg_write(WM8731_REG_LEFT_HPOUT, 0b01011111);
-    wm8731_reg_write(WM8731_REG_RIGHT_HPOUT,0b01011111);
+    wm8731_reg_write(WM8731_REG_LEFT_HPOUT, 0b01011000);
+    wm8731_reg_write(WM8731_REG_RIGHT_HPOUT,0b01011000);
 
     // Active control
     wm8731_reg_write(WM8731_REG_ACTIVE_CTRL, 0x01);
+
+    // power down control
+    wm8731_reg_write(WM8731_REG_PWDOWN_CTRL, 0b00000111);
 
     return true;
 }
