@@ -1,51 +1,51 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * This notice applies to any and all portions of this file
-  * that are not between comment pairs USER CODE BEGIN and
-  * USER CODE END. Other portions of this file, whether 
-  * inserted by the user or by software development tools
-  * are owned by their respective copyright owners.
-  *
-  * Copyright (c) 2019 STMicroelectronics International N.V. 
-  * All rights reserved.
-  *
-  * Redistribution and use in source and binary forms, with or without 
-  * modification, are permitted, provided that the following conditions are met:
-  *
-  * 1. Redistribution of source code must retain the above copyright notice, 
-  *    this list of conditions and the following disclaimer.
-  * 2. Redistributions in binary form must reproduce the above copyright notice,
-  *    this list of conditions and the following disclaimer in the documentation
-  *    and/or other materials provided with the distribution.
-  * 3. Neither the name of STMicroelectronics nor the names of other 
-  *    contributors to this software may be used to endorse or promote products 
-  *    derived from this software without specific written permission.
-  * 4. This software, including modifications and/or derivative works of this 
-  *    software, must execute solely and exclusively on microcontroller or
-  *    microprocessor devices manufactured by or for STMicroelectronics.
-  * 5. Redistribution and use of this software other than as permitted under 
-  *    this license is void and will automatically terminate your rights under 
-  *    this license. 
-  *
-  * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS" 
-  * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT 
-  * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A 
-  * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
-  * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT 
-  * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
-  * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-  * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, 
-  * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF 
-  * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
-  * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
-  * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file           : main.c
+ * @brief          : Main program body
+ ******************************************************************************
+ * This notice applies to any and all portions of this file
+ * that are not between comment pairs USER CODE BEGIN and
+ * USER CODE END. Other portions of this file, whether
+ * inserted by the user or by software development tools
+ * are owned by their respective copyright owners.
+ *
+ * Copyright (c) 2019 STMicroelectronics International N.V.
+ * All rights reserved.
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted, provided that the following conditions are met:
+ *
+ * 1. Redistribution of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 3. Neither the name of STMicroelectronics nor the names of other
+ *    contributors to this software may be used to endorse or promote products
+ *    derived from this software without specific written permission.
+ * 4. This software, including modifications and/or derivative works of this
+ *    software, must execute solely and exclusively on microcontroller or
+ *    microprocessor devices manufactured by or for STMicroelectronics.
+ * 5. Redistribution and use of this software other than as permitted under
+ *    this license is void and will automatically terminate your rights under
+ *    this license.
+ *
+ * THIS SOFTWARE IS PROVIDED BY STMICROELECTRONICS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS, IMPLIED OR STATUTORY WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+ * PARTICULAR PURPOSE AND NON-INFRINGEMENT OF THIRD PARTY INTELLECTUAL PROPERTY
+ * RIGHTS ARE DISCLAIMED TO THE FULLEST EXTENT PERMITTED BY LAW. IN NO EVENT
+ * SHALL STMICROELECTRONICS OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT,
+ * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
+ * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
+ * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
@@ -94,7 +94,7 @@
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+void ADPCM_Play_File(FIL *file);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -103,16 +103,16 @@ void SystemClock_Config(void);
 int _write(int file, char *ptr, int len) {
 	(void) file; /* Not used, avoid warning */
 //	SEGGER_RTT_Write(0, ptr, len);
-	HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, 1000);
+	HAL_UART_Transmit(&huart2, (uint8_t*) ptr, len, 1000);
 	return len;
 }
 
-gpio_t sd_cs = {SD_CS_GPIO_Port,SD_CS_Pin};
-gpio_t i2s_csb = {CSB_GPIO_Port,CSB_Pin};
+gpio_t sd_cs = { SD_CS_GPIO_Port, SD_CS_Pin };
+gpio_t i2s_csb = { CSB_GPIO_Port, CSB_Pin };
 
 void cs_pins_init() {
-	digitalWrite(sd_cs,HIGH);
-	digitalWrite(i2s_csb,LOW);
+	digitalWrite(sd_cs, HIGH);
+	digitalWrite(i2s_csb, LOW);
 }
 
 FATFS SD_FatFs;
@@ -136,23 +136,57 @@ bool mass_storage_mount() {
 	return true;
 }
 
-__IO uint8_t I2S_TX_CPLT = 0;
+bool mass_storage_list_files() {
+	DIR dir;
+	FRESULT result;
+	result = f_opendir(&dir, "/adpcm");
+	if (result != FR_OK) {
+		printf("f_opendir error: %d\n", result);
+		return false;
+	}
 
-void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s)
-{
- /* Prevent unused argument(s) compilation warning */
- UNUSED(hi2s);
- I2S_TX_CPLT = 1;
+	FILINFO info;
+	for (;;) {
+		result = f_readdir(&dir, &info);
+		if (result != FR_OK || info.fname[0] == 0) {
+			break;
+		}
+		if (info.fname[0] == '.') {
+			continue;
+		}
+		printf("Got file: %s\n", info.fname);
+
+		char fullpath[128];
+		snprintf(fullpath,sizeof(fullpath)-1,"/adpcm/%s",info.fname);
+
+		FIL file;
+		result = f_open(&file, fullpath, FA_READ);
+		if (result != FR_OK) {
+			printf("f_open error: %d\n", result);
+			break;
+		}
+		ADPCM_Play_File(&file);
+		f_close(&file);
+	}
+
+	f_closedir(&dir);
+	return true;
 }
 
+__IO uint8_t I2S_TX_CPLT = 0;
+
+void HAL_I2S_TxCpltCallback(I2S_HandleTypeDef *hi2s) {
+	/* Prevent unused argument(s) compilation warning */
+	UNUSED(hi2s);
+	I2S_TX_CPLT = 1;
+}
 
 //__IO uint8_t I2S_TX_HALF_CPLT = 0;
 
-void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
-{
- /* Prevent unused argument(s) compilation warning */
- UNUSED(hi2s);
- I2S_TX_CPLT = 1;
+void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s) {
+	/* Prevent unused argument(s) compilation warning */
+	UNUSED(hi2s);
+	I2S_TX_CPLT = 1;
 }
 
 uint8_t block[2048];
@@ -190,32 +224,35 @@ void ADPCM_Play_File(FIL *file) {
 	unsigned int nread = 0;
 	f_rewind(file);
 	IMA_ADPCM_HEADER header;
-	result = f_read(file,&header,sizeof(header),&nread);
-	if(result != FR_OK) {
-		printf("f_read error: %d\n",result);
-		while(1);
+	result = f_read(file, &header, sizeof(header), &nread);
+	if (result != FR_OK) {
+		printf("f_read error: %d\n", result);
+		while (1)
+			;
 	}
 	ADPCM_WaveParsing(&header);
 
 	int8_t samples_index = 0;
 
-	memset(samples,0,4082*2*2);
-	HAL_I2S_Transmit_DMA(&hi2s2, samples[0], 4082*2);
+	memset(samples, 0, 4082 * 2 * 2);
+	HAL_I2S_Transmit_DMA(&hi2s2, samples[0], 4082 * 2);
 
-	while(!f_eof(file)) {
-		result = f_read(file,block,sizeof(block),&nread);
-		if(result != FR_OK) {
-			printf("f_read error: %d\n",result);
-			while(1);
+	while (!f_eof(file)) {
+		result = f_read(file, block, sizeof(block), &nread);
+		if (result != FR_OK) {
+			printf("f_read error: %d\n", result);
+			while (1)
+				;
 		}
 
-		while(I2S_TX_CPLT == 0);
+		while (I2S_TX_CPLT == 0)
+			;
 		I2S_TX_CPLT = 0;
 
-		int32_t left_predsample = *((int16_t *)(block+0));
+		int32_t left_predsample = *((int16_t*) (block + 0));
 		int16_t left_index = block[2];
 
-		int32_t right_predsample = *((int16_t *)(block+4));
+		int32_t right_predsample = *((int16_t*) (block + 4));
 		int16_t right_index = block[6];
 
 		//memset(samples[samples_index],0,4082*2);
@@ -224,12 +261,12 @@ void ADPCM_Play_File(FIL *file) {
 		samples[samples_index][samples_i] = left_predsample;
 		samples_i++;
 		samples[samples_index][samples_i] = right_predsample;
-		samples_i ++;
+		samples_i++;
 
 		uint8_t code;
 
-		ADPCM_Block_Init(left_index,left_predsample);
-		for(int i=8;i<2048;) {
+		ADPCM_Block_Init(left_index, left_predsample);
+		for (int i = 8; i < 2048;) {
 			//left channel
 			code = (block[i] & 0x0F);
 			samples[samples_index][samples_i] = ADPCM_Decode(code);
@@ -262,12 +299,12 @@ void ADPCM_Play_File(FIL *file) {
 			samples[samples_index][samples_i] = ADPCM_Decode(code);
 			samples_i += 2;
 
-			i+=5;
+			i += 5;
 		}
 
 		samples_i = 3;
-		ADPCM_Block_Init(right_index,right_predsample);
-		for(int i=12;i<2048;) {
+		ADPCM_Block_Init(right_index, right_predsample);
+		for (int i = 12; i < 2048;) {
 			//right channel
 			code = (block[i] & 0x0F);
 			samples[samples_index][samples_i] = ADPCM_Decode(code);
@@ -300,7 +337,157 @@ void ADPCM_Play_File(FIL *file) {
 			samples[samples_index][samples_i] = ADPCM_Decode(code);
 			samples_i += 2;
 
-			i+=5;
+			i += 5;
+		}
+		samples_index = 1 - samples_index;
+	}
+	HAL_I2S_DMAStop(&hi2s2);
+}
+
+/**
+ * Support play WAV file.
+ *
+ General
+ Format                         : Wave
+ File size                      : 59.1 MiB
+ Duration                       : 5 min 14 s
+ Overall bit rate mode          : Constant
+ Overall bit rate               : 1 577 kb/s
+
+ Audio
+ Format                         : PCM
+ Format settings, Endianness    : Little
+ Format settings, Sign          : Signed
+ Codec ID                       : 1
+ Duration                       : 5 min 14 s
+ Bit rate mode                  : Constant
+ Bit rate                       : 1 536 kb/s
+ Channel(s)                     : 2 channels
+ Sampling rate                  : 48.0 kHz
+ Bit depth                      : 16 bits
+ Stream size                    : 57.6 MiB (97%)
+
+ */
+
+void WAV_Play_File(FIL *file) {
+	FRESULT result;
+	unsigned int nread = 0;
+	f_rewind(file);
+	IMA_ADPCM_HEADER header;
+	result = f_read(file, &header, sizeof(header), &nread);
+	if (result != FR_OK) {
+		printf("f_read error: %d\n", result);
+		while (1)
+			;
+	}
+	ADPCM_WaveParsing(&header);
+
+	int8_t samples_index = 0;
+
+	memset(samples, 0, 4082 * 2 * 2);
+	HAL_I2S_Transmit_DMA(&hi2s2, samples[0], 4082 * 2);
+
+	while (!f_eof(file)) {
+		result = f_read(file, block, sizeof(block), &nread);
+		if (result != FR_OK) {
+			printf("f_read error: %d\n", result);
+			while (1)
+				;
+		}
+
+		while (I2S_TX_CPLT == 0)
+			;
+		I2S_TX_CPLT = 0;
+
+		int32_t left_predsample = *((int16_t*) (block + 0));
+		int16_t left_index = block[2];
+
+		int32_t right_predsample = *((int16_t*) (block + 4));
+		int16_t right_index = block[6];
+
+		//memset(samples[samples_index],0,4082*2);
+
+		int samples_i = 0;
+		samples[samples_index][samples_i] = left_predsample;
+		samples_i++;
+		samples[samples_index][samples_i] = right_predsample;
+		samples_i++;
+
+		uint8_t code;
+
+		ADPCM_Block_Init(left_index, left_predsample);
+		for (int i = 8; i < 2048;) {
+			//left channel
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i += 5;
+		}
+
+		samples_i = 3;
+		ADPCM_Block_Init(right_index, right_predsample);
+		for (int i = 12; i < 2048;) {
+			//right channel
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i++;
+			code = (block[i] & 0x0F);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+			code = (block[i] >> 4);
+			samples[samples_index][samples_i] = ADPCM_Decode(code);
+			samples_i += 2;
+
+			i += 5;
 		}
 		samples_index = 1 - samples_index;
 	}
@@ -345,36 +532,40 @@ int main(void)
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  cs_pins_init();
-  wm8731_dac_init();
+	cs_pins_init();
+	wm8731_dac_init();
 
-  if(!mass_storage_mount()) {
-	  Error_Handler();
-  }
+	if (!mass_storage_mount()) {
+		Error_Handler();
+	}
 
-  FIL file;
-  FRESULT result = f_open(&file,"adpcm.wav",FA_READ);
-  if(result != FR_OK) {
-	  printf("f_open error: %d\n",result);
-	  while(1);
-  }
+	mass_storage_list_files();
+	while (1)
+		;
+
+	FIL file;
+	FRESULT result = f_open(&file, "adpcm.wav", FA_READ);
+	if (result != FR_OK) {
+		printf("f_open error: %d\n", result);
+		while (1)
+			;
+	}
 
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+	while (1) {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  printf("Begin to play music!\n");
-	  //Play music in SDIO SD Card.
-	  f_rewind(&file);
-	  ADPCM_Play_File(&file);
-	  delay(1000);
+		printf("Begin to play music!\n");
+		//Play music in SDIO SD Card.
+		f_rewind(&file);
+		ADPCM_Play_File(&file);
+		delay(1000);
 
-  }
+	}
   /* USER CODE END 3 */
 }
 
@@ -439,7 +630,7 @@ void SystemClock_Config(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
+	/* User can add his own implementation to report the HAL error return state */
 
   /* USER CODE END Error_Handler_Debug */
 }
