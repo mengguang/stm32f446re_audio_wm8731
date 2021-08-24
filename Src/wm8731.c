@@ -1,12 +1,13 @@
 /*
  * wm8731.c
  *
- *  Created on: 2019Äê1ÔÂ21ÈÕ
+ *  Created on: 2019ï¿½ï¿½1ï¿½ï¿½21ï¿½ï¿½
  *      Author: mengguang
  */
 
 
 #include "wm8731.h"
+#include <stdio.h>
 
 void wm8731_display_wav_info(WAVE_FormatTypeDef * format)
 {

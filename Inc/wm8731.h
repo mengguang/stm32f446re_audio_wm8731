@@ -1,7 +1,7 @@
 /*
  * wm8731.h
  *
- *  Created on: 2019Äê1ÔÂ20ÈÕ
+ *  Created on: 2019ï¿½ï¿½1ï¿½ï¿½20ï¿½ï¿½
  *      Author: mengguang
  */
 
@@ -14,7 +14,6 @@
 #include "i2s.h"
 #include "gpio.h"
 
-#include "SEGGER_RTT.h"
 #include "stdbool.h"
 
 //------------------------------------------------------------------------------
@@ -24,8 +23,8 @@
 #define WM8731_CSB_STATE                         (0x0 << 0)
 
 /// Slave address
-//#define WM8731_SLAVE_ADDRESS        0x1a | WM8731_CSB_STATE
-#define WM8731_SLAVE_ADDRESS                      0x1a
+#define WM8731_SLAVE_ADDRESS        (0x1a | WM8731_CSB_STATE)
+//#define WM8731_SLAVE_ADDRESS                      0x1a
 
 
 /// Reset register

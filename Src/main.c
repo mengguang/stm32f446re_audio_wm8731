@@ -47,25 +47,27 @@
   ******************************************************************************
   */
 /* USER CODE END Header */
-
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "dma.h"
 #include "fatfs.h"
 #include "i2c.h"
 #include "i2s.h"
-#include "sdio.h"
+#include "spi.h"
 #include "usart.h"
 #include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "SEGGER_RTT.h"
 #include "wm8731.h"
 #include "stdbool.h"
 #include "ff.h"
 #include "adpcm.h"
+#include <stdio.h>
 #include "string.h"
+#include "stm32_adafruit_sd.h"
+#include "sd_diskio.h"
+#include "misc_utils.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -75,12 +77,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-/* Audio file size and start offset address are defined here since the audio wave file is
-   stored in Flash memory as a constant table of 16-bit data
- */
-#define AUDIO_FILE_SIZE               411444        /* Size of audio file */
-#define AUDIO_START_OFFSET_ADDRESS    44            /* Offset relative to audio file header size */
-#define AUDIO_FILE_ADDRESS            0x08010000    /* Audio file address */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -103,13 +100,40 @@ void SystemClock_Config(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-// Attention Please!
-// You must enable pull up on SDIO interface.
-
 int _write(int file, char *ptr, int len) {
 	(void) file; /* Not used, avoid warning */
-	SEGGER_RTT_Write(0, ptr, len);
+//	SEGGER_RTT_Write(0, ptr, len);
+	HAL_UART_Transmit(&huart2, (uint8_t *)ptr, len, 1000);
 	return len;
+}
+
+gpio_t sd_cs = {SD_CS_GPIO_Port,SD_CS_Pin};
+gpio_t i2s_csb = {CSB_GPIO_Port,CSB_Pin};
+
+void cs_pins_init() {
+	digitalWrite(sd_cs,HIGH);
+	digitalWrite(i2s_csb,LOW);
+}
+
+FATFS SD_FatFs;
+
+bool mass_storage_mount() {
+	FATFS_UnLinkDriver(USERPath);
+	uint8_t retUSER = FATFS_LinkDriver(&SD_Driver, USERPath);
+	if (retUSER == 0) {
+		/* Initialize the SD mounted on adafruit 1.8" TFT shield */
+		if (BSP_SD_Init() != MSD_OK) {
+			printf("BSP_SD_Init error.\n");
+			return false;
+		}
+
+		/* Check the mounted device */
+		if (f_mount(&SD_FatFs, (TCHAR const*) "/", 0) != FR_OK) {
+			printf("f_mount error.\n");
+			return false;
+		}
+	}
+	return true;
 }
 
 __IO uint8_t I2S_TX_CPLT = 0;
@@ -133,6 +157,33 @@ void HAL_I2S_TxHalfCpltCallback(I2S_HandleTypeDef *hi2s)
 
 uint8_t block[2048];
 uint16_t samples[2][4082];
+
+/**
+ * Support play ADPCM WAV file.
+ * Audio: IMA ADPCM 48000Hz stereo 385kbps
+ * [A: adpcm_ima_wav, 48000 Hz, 2 channels, s16, 385 kb/s]
+ * Example:
+ *
+ * General
+ * Format                         : Wave
+ * File size                      : 11.5 MiB
+ * Duration                       : 4 min 10 s
+ * Overall bit rate mode          : Constant
+ * Overall bit rate               : 384 kb/s
+ *
+ * Audio
+ * Format                         : ADPCM
+ * Codec ID                       : 11
+ * Codec ID/Hint                  : Intel
+ * Duration                       : 4 min 10 s
+ * Bit rate mode                  : Constant
+ * Bit rate                       : 384 kb/s
+ * Channel(s)                     : 2 channels
+ * Sampling rate                  : 48.0 kHz
+ * Bit depth                      : 4 bits
+ * Stream size                    : 11.5 MiB (100%)
+ *
+ */
 
 void ADPCM_Play_File(FIL *file) {
 	FRESULT result;
@@ -179,7 +230,6 @@ void ADPCM_Play_File(FIL *file) {
 
 		ADPCM_Block_Init(left_index,left_predsample);
 		for(int i=8;i<2048;) {
-
 			//left channel
 			code = (block[i] & 0x0F);
 			samples[samples_index][samples_i] = ADPCM_Decode(code);
@@ -218,7 +268,6 @@ void ADPCM_Play_File(FIL *file) {
 		samples_i = 3;
 		ADPCM_Block_Init(right_index,right_predsample);
 		for(int i=12;i<2048;) {
-
 			//right channel
 			code = (block[i] & 0x0F);
 			samples[samples_index][samples_i] = ADPCM_Decode(code);
@@ -253,12 +302,9 @@ void ADPCM_Play_File(FIL *file) {
 
 			i+=5;
 		}
-
 		samples_index = 1 - samples_index;
 	}
 	HAL_I2S_DMAStop(&hi2s2);
-
-
 }
 
 /* USER CODE END 0 */
@@ -295,17 +341,16 @@ int main(void)
   MX_USART2_UART_Init();
   MX_I2S2_Init();
   MX_I2C1_Init();
-  MX_SDIO_SD_Init();
+  MX_SPI1_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_Delay(100);
-  MX_I2C1_Init();
+  cs_pins_init();
   wm8731_dac_init();
 
-  //while(1);
-
-  unsigned int nread = 0;
+  if(!mass_storage_mount()) {
+	  Error_Handler();
+  }
 
   FIL file;
   FRESULT result = f_open(&file,"adpcm.wav",FA_READ);
@@ -313,12 +358,6 @@ int main(void)
 	  printf("f_open error: %d\n",result);
 	  while(1);
   }
-
-
-
-  ADPCM_Play_File(&file);
-
-  while(1);
 
   /* USER CODE END 2 */
 
@@ -329,67 +368,11 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 	  printf("Begin to play music!\n");
-
 	  //Play music in SDIO SD Card.
 	  f_rewind(&file);
-	  WAVE_FormatTypeDef header;
-
-	  result = f_read(&file,&header,sizeof(WAVE_FormatTypeDef),&nread);
-	  if(result != FR_OK) {
-		  printf("f_read error: %d\n",result);
-		  Error_Handler();
-	  }
-	  wm8731_display_wav_info(&header);
-
-	  uint8_t read_buffer[2][16384];
-	  //I2S_TX_CPLT = 1;
-	  uint8_t read_buffer_index = 0;
-
-	  result = f_read(&file,read_buffer[read_buffer_index],16384 * 2,&nread);
-	  if(result != FR_OK) {
-		  printf("f_read error: %d\n",result);
-		  Error_Handler();
-	  }
-	  // circular buffer
-	  HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t *)(read_buffer[read_buffer_index]), 16384);
-
-	  while(!f_eof(&file)) {
-		  while(I2S_TX_CPLT == 0);
-		  I2S_TX_CPLT = 0;
-
-		  printf("start read: %lu\n",f_tell(&file));
-		  result = f_read(&file,read_buffer[read_buffer_index],16384,&nread);
-		  if(result != FR_OK) {
-			  printf("f_read error: %d\n",result);
-			  Error_Handler();
-		  }
-		  printf("nread: %d\n",nread);
-		  read_buffer_index = 1 - read_buffer_index;
-	  }
-	  HAL_I2S_DMAStop(&hi2s2);
-
-
-	  //Play music from internal flash.
-      /*
-	  WAVE_FormatTypeDef *waveformat = (WAVE_FormatTypeDef*)AUDIO_FILE_ADDRESS;
-      wm8731_display_wav_info(waveformat);
-	  uint32_t begin = AUDIO_FILE_ADDRESS + AUDIO_START_OFFSET_ADDRESS;
-	  uint32_t current = 0;
-	  uint32_t total = AUDIO_FILE_SIZE - AUDIO_START_OFFSET_ADDRESS;
-	  uint32_t block_size = 16384;
-	  while(current < total) {
-		  if(total - current < block_size) {
-			  block_size = total - current;
-		  }
-		  printf("current: %lu\n",current);
-		  HAL_I2S_Transmit_DMA(&hi2s2, (uint16_t *)(begin + current), (block_size / 2));
-		  while(I2S_TX_CPLT == 0);
-		  I2S_TX_CPLT = 0;
-		  current += block_size;
-	  }
-	  */
+	  ADPCM_Play_File(&file);
+	  delay(1000);
 
   }
   /* USER CODE END 3 */
@@ -403,20 +386,19 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
-  RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
 
-  /**Configure the main internal regulator output voltage 
+  /** Configure the main internal regulator output voltage
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-  /**Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
   RCC_OscInitStruct.PLL.PLLN = 180;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 8;
@@ -425,13 +407,13 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
-  /**Activate the Over-Drive mode 
+  /** Activate the Over-Drive mode
   */
   if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
-  /**Initializes the CPU, AHB and APB busses clocks 
+  /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
@@ -441,21 +423,6 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  PeriphClkInitStruct.PeriphClockSelection = RCC_PERIPHCLK_I2S_APB1|RCC_PERIPHCLK_SDIO
-                              |RCC_PERIPHCLK_CLK48;
-  PeriphClkInitStruct.PLLI2S.PLLI2SN = 50;
-  PeriphClkInitStruct.PLLI2S.PLLI2SP = RCC_PLLI2SP_DIV2;
-  PeriphClkInitStruct.PLLI2S.PLLI2SM = 8;
-  PeriphClkInitStruct.PLLI2S.PLLI2SR = 2;
-  PeriphClkInitStruct.PLLI2S.PLLI2SQ = 2;
-  PeriphClkInitStruct.PLLI2SDivQ = 1;
-  PeriphClkInitStruct.Clk48ClockSelection = RCC_CLK48CLKSOURCE_PLLQ;
-  PeriphClkInitStruct.SdioClockSelection = RCC_SDIOCLKSOURCE_CLK48;
-  PeriphClkInitStruct.I2sApb1ClockSelection = RCC_I2SAPB1CLKSOURCE_PLLI2S;
-  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInitStruct) != HAL_OK)
   {
     Error_Handler();
   }
@@ -486,7 +453,7 @@ void Error_Handler(void)
   * @retval None
   */
 void assert_failed(uint8_t *file, uint32_t line)
-{ 
+{
   /* USER CODE BEGIN 6 */
   /* User can add his own implementation to report the file name and line number,
      tex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
