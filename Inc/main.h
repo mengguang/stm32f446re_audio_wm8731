@@ -88,8 +88,8 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define BUTTON_BLUE_Pin GPIO_PIN_13
-#define BUTTON_BLUE_GPIO_Port GPIOC
+#define KEY_BLUE_Pin GPIO_PIN_13
+#define KEY_BLUE_GPIO_Port GPIOC
 #define CSB_Pin GPIO_PIN_3
 #define CSB_GPIO_Port GPIOC
 #define SD_CD_Pin GPIO_PIN_4

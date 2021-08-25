@@ -102,7 +102,7 @@ void WAV_Play_File(FIL *file);
 /* USER CODE BEGIN 0 */
 
 int _write(int file, char *ptr, int len) {
-	(void) file; /* Not used, avoid warning */
+	(void) file;
 //	SEGGER_RTT_Write(0, ptr, len);
 	HAL_UART_Transmit(&huart2, (uint8_t*) ptr, len, 1000);
 	return len;
@@ -111,9 +111,19 @@ int _write(int file, char *ptr, int len) {
 gpio_t sd_cs = { SD_CS_GPIO_Port, SD_CS_Pin };
 gpio_t i2s_csb = { CSB_GPIO_Port, CSB_Pin };
 
+gpio_t key_blue = {KEY_BLUE_GPIO_Port,KEY_BLUE_Pin};
+
 void cs_pins_init() {
 	digitalWrite(sd_cs, HIGH);
 	digitalWrite(i2s_csb, LOW);
+}
+
+bool check_next_request() {
+	if(digitalRead(key_blue) == LOW) {
+		return true;
+	} else {
+		return false;
+	}
 }
 
 FATFS SD_FatFs;
@@ -122,13 +132,10 @@ bool mass_storage_mount() {
 	FATFS_UnLinkDriver(USERPath);
 	uint8_t retUSER = FATFS_LinkDriver(&SD_Driver, USERPath);
 	if (retUSER == 0) {
-		/* Initialize the SD mounted on adafruit 1.8" TFT shield */
 		if (BSP_SD_Init() != MSD_OK) {
 			printf("BSP_SD_Init error.\n");
 			return false;
 		}
-
-		/* Check the mounted device */
 		if (f_mount(&SD_FatFs, (TCHAR const*) "/", 0) != FR_OK) {
 			printf("f_mount error.\n");
 			return false;
@@ -137,11 +144,10 @@ bool mass_storage_mount() {
 	return true;
 }
 
-bool mass_storage_list_files() {
+bool mass_storage_list_files(const char *path_prefix,bool adpcm) {
 	DIR dir;
 	FRESULT result;
-//	result = f_opendir(&dir, "/adpcm");
-	result = f_opendir(&dir, "/wav");
+	result = f_opendir(&dir, path_prefix);
 	if (result != FR_OK) {
 		printf("f_opendir error: %d\n", result);
 		return false;
@@ -156,10 +162,10 @@ bool mass_storage_list_files() {
 		if (info.fname[0] == '.') {
 			continue;
 		}
-		printf("Got file: %s\n", info.fname);
+		printf("\n\nGot file: %s\n", info.fname);
 
-		char fullpath[128];
-		snprintf(fullpath, sizeof(fullpath) - 1, "/wav/%s", info.fname);
+		char fullpath[320];
+		snprintf(fullpath, sizeof(fullpath) - 1, "%s/%s", path_prefix, info.fname);
 
 		FIL file;
 		result = f_open(&file, fullpath, FA_READ);
@@ -167,8 +173,13 @@ bool mass_storage_list_files() {
 			printf("f_open error: %d\n", result);
 			break;
 		}
-		WAV_Play_File(&file);
+		if(adpcm) {
+			ADPCM_Play_File(&file);
+		} else {
+			WAV_Play_File(&file);
+		}
 		f_close(&file);
+		delay(1000);
 	}
 
 	f_closedir(&dir);
@@ -240,6 +251,12 @@ void ADPCM_Play_File(FIL *file) {
 	HAL_I2S_Transmit_DMA(&hi2s2, samples[0], 4082 * 2);
 
 	while (!f_eof(file)) {
+
+		if(check_next_request()) {
+			printf("Play next file.\n");
+			break;
+		}
+
 		result = f_read(file, block, sizeof(block), &nread);
 		if (result != FR_OK) {
 			printf("f_read error: %d\n", result);
@@ -390,6 +407,11 @@ void WAV_Play_File(FIL *file) {
 
 	while (!f_eof(file)) {
 
+		if(check_next_request()) {
+			printf("Play next file.\n");
+			break;
+		}
+
 		while (I2S_TX_CPLT == 0)
 			;
 		I2S_TX_CPLT = 0;
@@ -409,39 +431,40 @@ void WAV_Play_File(FIL *file) {
 /* USER CODE END 0 */
 
 /**
- * @brief  The application entry point.
- * @retval int
- */
-int main(void) {
-	/* USER CODE BEGIN 1 */
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
 
-	/* USER CODE END 1 */
+  /* USER CODE END 1 */
 
-	/* MCU Configuration--------------------------------------------------------*/
+  /* MCU Configuration--------------------------------------------------------*/
 
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-	/* USER CODE BEGIN Init */
+  /* USER CODE BEGIN Init */
 
-	/* USER CODE END Init */
+  /* USER CODE END Init */
 
-	/* Configure the system clock */
-	SystemClock_Config();
+  /* Configure the system clock */
+  SystemClock_Config();
 
-	/* USER CODE BEGIN SysInit */
+  /* USER CODE BEGIN SysInit */
 
-	/* USER CODE END SysInit */
+  /* USER CODE END SysInit */
 
-	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
-	MX_DMA_Init();
-	MX_USART2_UART_Init();
-	MX_I2S2_Init();
-	MX_I2C1_Init();
-	MX_SPI1_Init();
-	MX_FATFS_Init();
-	/* USER CODE BEGIN 2 */
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_DMA_Init();
+  MX_USART2_UART_Init();
+  MX_I2S2_Init();
+  MX_I2C1_Init();
+  MX_SPI1_Init();
+  MX_FATFS_Init();
+  /* USER CODE BEGIN 2 */
 
 	cs_pins_init();
 	wm8731_dac_init();
@@ -450,80 +473,86 @@ int main(void) {
 		Error_Handler();
 	}
 
-	mass_storage_list_files();
-	while (1)
-		;
-
-	FIL file;
-	FRESULT result = f_open(&file, "adpcm.wav", FA_READ);
-	if (result != FR_OK) {
-		printf("f_open error: %d\n", result);
-		while (1)
-			;
+	while(1) {
+		mass_storage_list_files("/wav",false);
 	}
 
-	/* USER CODE END 2 */
+//	while (1)
+//		;
+//
+//	FIL file;
+//	FRESULT result = f_open(&file, "adpcm.wav", FA_READ);
+//	if (result != FR_OK) {
+//		printf("f_open error: %d\n", result);
+//		while (1)
+//			;
+//	}
 
-	/* Infinite loop */
-	/* USER CODE BEGIN WHILE */
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
 	while (1) {
-		/* USER CODE END WHILE */
+    /* USER CODE END WHILE */
 
-		/* USER CODE BEGIN 3 */
-		printf("Begin to play music!\n");
-		//Play music in SDIO SD Card.
-		f_rewind(&file);
-		ADPCM_Play_File(&file);
-		delay(1000);
+    /* USER CODE BEGIN 3 */
+//		printf("Begin to play music!\n");
+//		f_rewind(&file);
+//		ADPCM_Play_File(&file);
+//		delay(1000);
 
 	}
-	/* USER CODE END 3 */
+  /* USER CODE END 3 */
 }
 
 /**
- * @brief System Clock Configuration
- * @retval None
- */
-void SystemClock_Config(void) {
-	RCC_OscInitTypeDef RCC_OscInitStruct = { 0 };
-	RCC_ClkInitTypeDef RCC_ClkInitStruct = { 0 };
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-	/** Configure the main internal regulator output voltage
-	 */
-	__HAL_RCC_PWR_CLK_ENABLE();
-	__HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-	/** Initializes the RCC Oscillators according to the specified parameters
-	 * in the RCC_OscInitTypeDef structure.
-	 */
-	RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
-	RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-	RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-	RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-	RCC_OscInitStruct.PLL.PLLM = 4;
-	RCC_OscInitStruct.PLL.PLLN = 180;
-	RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
-	RCC_OscInitStruct.PLL.PLLQ = 8;
-	RCC_OscInitStruct.PLL.PLLR = 2;
-	if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
-		Error_Handler();
-	}
-	/** Activate the Over-Drive mode
-	 */
-	if (HAL_PWREx_EnableOverDrive() != HAL_OK) {
-		Error_Handler();
-	}
-	/** Initializes the CPU, AHB and APB buses clocks
-	 */
-	RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK
-			| RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
-	RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
-	RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-	RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
+  /** Configure the main internal regulator output voltage
+  */
+  __HAL_RCC_PWR_CLK_ENABLE();
+  __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+  /** Initializes the RCC Oscillators according to the specified parameters
+  * in the RCC_OscInitTypeDef structure.
+  */
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 180;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
+  RCC_OscInitStruct.PLL.PLLQ = 8;
+  RCC_OscInitStruct.PLL.PLLR = 2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Activate the Over-Drive mode
+  */
+  if (HAL_PWREx_EnableOverDrive() != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Initializes the CPU, AHB and APB buses clocks
+  */
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
+                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-	if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK) {
-		Error_Handler();
-	}
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
+  {
+    Error_Handler();
+  }
 }
 
 /* USER CODE BEGIN 4 */
@@ -531,14 +560,15 @@ void SystemClock_Config(void) {
 /* USER CODE END 4 */
 
 /**
- * @brief  This function is executed in case of error occurrence.
- * @retval None
- */
-void Error_Handler(void) {
-	/* USER CODE BEGIN Error_Handler_Debug */
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
 	/* User can add his own implementation to report the HAL error return state */
 
-	/* USER CODE END Error_Handler_Debug */
+  /* USER CODE END Error_Handler_Debug */
 }
 
 #ifdef  USE_FULL_ASSERT
